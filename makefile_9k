@@ -1,0 +1,41 @@
+BOARD=tangnano9k
+FAMILY=GW1N-9C
+DEVICE=GW1NR-LV9QN88PC6/I5
+
+all: counter.fs
+
+# Synthesis
+counter.json: counter.v
+	yosys -p "read_verilog counter.v; synth_gowin -top counter -json counter.json"
+
+#/home/jakobsen/oss-cad-suite/bin/yosys -p "read_verilog counter.v; synth_gowin -top counter -json counter.json"
+
+# Place and Route
+counter_pnr.json: counter.json
+	nextpnr-gowin --json counter.json --freq 27 --write counter_pnr.json --device ${DEVICE} --family ${FAMILY} --cst ${BOARD}.cst
+
+# Generate Bitstream
+counter.fs: counter_pnr.json
+	gowin_pack -d ${FAMILY} -o counter.fs counter_pnr.json
+
+# Program Board
+load: counter.fs
+	openFPGALoader -b ${BOARD} counter.fs -f
+
+.PHONY: load
+.INTERMEDIATE: counter_pnr.json counter.json
+
+synth:
+	echo "read_verilog counter.v" > yosys.cmd ;\
+	echo "synth_gowin -top counter -json counter.json" >> yosys.cmd ;\
+	yosys -s yosys.cmd
+
+place:
+	nextpnr-gowin --json counter.json --freq 27 --write counter_pnr.json \
+	--device GW1NR-LV9QN88PC6/I5 --family GW1N-9C --cst tangnano9k.cst
+
+bit:	
+	gowin_pack -d GW1N-9C -o counter.fs counter_pnr.json 
+
+prog:
+	openFPGALoader -b tangnano9k -f counter.fs
